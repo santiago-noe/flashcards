@@ -23,28 +23,32 @@ interface DeckFull {
   masteryPercent: number;
 }
 
+const COURSES: { name: string; icon: string }[] = [
+  { name: 'REDES DE DATOS', icon: '🌐' },
+  { name: 'DERECHO INFORMÁTICO', icon: '⚖️' },
+  { name: 'GESTIÓN DE DATOS E INFORMACIÓN', icon: '🗄️' },
+  { name: 'GESTIÓN DE RIESGOS Y SEGURIDAD TI', icon: '🔒' },
+  { name: 'INGLÉS', icon: '🇬🇧' },
+  { name: 'METODOLOGÍA DE LA INVESTIGACIÓN CIENTÍFICA', icon: '🔬' },
+  { name: 'PRUEBA Y ASEGURAMIENTO DE CALIDAD', icon: '🧪' },
+];
+
+const STAT_ICONS = ['📚', '🃏', '📖', '🎯'];
+
 export default function AdminPage() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [decks, setDecks] = useState<DeckFull[]>([]);
   const [activeCourse, setActiveCourse] = useState('REDES DE DATOS');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const COURSES = [
-    'DERECHO INFORMÁTICO',
-    'GESTIÓN DE DATOS E INFORMACIÓN',
-    'GESTIÓN DE RIESGOS Y SEGURIDAD TI',
-    'INGLÉS',
-    'METODOLOGÍA DE LA INVESTIGACIÓN CIENTÍFICA',
-    'PRUEBA Y ASEGURAMIENTO DE CALIDAD',
-    'REDES DE DATOS',
-  ];
   const [showModal, setShowModal] = useState(false);
   const [editDeck, setEditDeck] = useState<DeckFull | null>(null);
-  
+
   // Card management state
   const [manageCardsDeck, setManageCardsDeck] = useState<DeckFull | null>(null);
   const [showCardModal, setShowCardModal] = useState(false);
   const [cardForm, setCardForm] = useState({ front: '', back: '', hint: '', difficulty: 'medium' });
   const [editCardId, setEditCardId] = useState<string | null>(null);
+  const [cardTab, setCardTab] = useState<'add' | 'list'>('add');
 
   const [toast, setToast] = useState<{ msg: string; type: string } | null>(null);
   const [form, setForm] = useState({
@@ -78,7 +82,7 @@ export default function AdminPage() {
         ? { title: form.title, description: form.description, course: form.course, category: form.category, icon: form.icon, color: form.color }
         : { ...form, cards: [] };
       await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-      showToast(editDeck ? 'Mazo actualizado' : 'Mazo creado');
+      showToast(editDeck ? '✅ Mazo actualizado' : '✅ Mazo creado');
       setShowModal(false);
       setEditDeck(null);
       setForm({ title: '', description: '', course: 'REDES DE DATOS', category: 'General', icon: '📚', color: '#6366f1' });
@@ -87,22 +91,22 @@ export default function AdminPage() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('¿Eliminar este mazo?')) return;
+    if (!confirm('¿Eliminar este mazo y todas sus tarjetas?')) return;
     await fetch(`/api/decks/${id}`, { method: 'DELETE' });
-    showToast('Mazo eliminado');
+    showToast('🗑️ Mazo eliminado');
     fetchAll();
   };
 
   const handleResetProgress = async () => {
-    if (!confirm('¿Reiniciar todo el progreso de estudio?')) return;
+    if (!confirm('¿Reiniciar todo el progreso de estudio? Esta acción no se puede deshacer.')) return;
     await fetch('/api/admin/reset-progress', { method: 'POST' });
-    showToast('Progreso reiniciado');
+    showToast('🔄 Progreso reiniciado');
     fetchAll();
   };
 
   const handleSeed = async () => {
     await fetch('/api/decks/seed', { method: 'POST' });
-    showToast('Mazos de ejemplo creados');
+    showToast('🌱 Mazos de ejemplo creados');
     fetchAll();
   };
 
@@ -123,6 +127,7 @@ export default function AdminPage() {
       const res = await fetch(`/api/decks/${deck._id}`);
       const fullDeck = await res.json();
       setManageCardsDeck(fullDeck);
+      setCardTab('add');
       setShowCardModal(true);
     } catch (e) {
       showToast('Error al cargar mazo', 'error');
@@ -134,17 +139,17 @@ export default function AdminPage() {
     setManageCardsDeck(null);
     setCardForm({ front: '', back: '', hint: '', difficulty: 'medium' });
     setEditCardId(null);
-    fetchAll(); // Refresh counts
+    fetchAll();
   };
 
   const handleSaveCard = async () => {
     if (!manageCardsDeck) return;
     try {
-      const url = editCardId 
+      const url = editCardId
         ? `/api/cards/${manageCardsDeck._id}/${editCardId}`
         : `/api/cards/${manageCardsDeck._id}`;
       const method = editCardId ? 'PUT' : 'POST';
-      
+
       const res = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
@@ -154,7 +159,8 @@ export default function AdminPage() {
       setManageCardsDeck(updatedDeck);
       setCardForm({ front: '', back: '', hint: '', difficulty: 'medium' });
       setEditCardId(null);
-      showToast(editCardId ? 'Tarjeta actualizada' : 'Tarjeta añadida');
+      showToast(editCardId ? '✅ Tarjeta actualizada' : '✅ Tarjeta añadida');
+      if (!editCardId) setCardTab('list');
     } catch (e) {
       showToast('Error al guardar tarjeta', 'error');
     }
@@ -166,99 +172,137 @@ export default function AdminPage() {
       await fetch(`/api/cards/${manageCardsDeck._id}/${cardId}`, { method: 'DELETE' });
       const res = await fetch(`/api/decks/${manageCardsDeck._id}`);
       setManageCardsDeck(await res.json());
-      showToast('Tarjeta eliminada');
+      showToast('🗑️ Tarjeta eliminada');
     } catch (e) {
       showToast('Error al eliminar', 'error');
     }
   };
-  
+
   const editCard = (card: any) => {
     setEditCardId(card._id);
     setCardForm({ front: card.front, back: card.back, hint: card.hint || '', difficulty: card.difficulty || 'medium' });
+    setCardTab('add');
+  };
+
+  const filteredDecks = decks.filter(
+    d => d.course === activeCourse || (!d.course && activeCourse === 'REDES DE DATOS')
+  );
+
+  const difficultyColor: Record<string, string> = {
+    easy: 'var(--green)', medium: 'var(--yellow)', hard: 'var(--red)',
   };
 
   return (
-    <div className="container">
+    <div>
       <div className={`sidebar-overlay ${isSidebarOpen ? 'open' : ''}`} onClick={() => setIsSidebarOpen(false)} />
 
       <div className="app-layout" style={{ paddingTop: 24 }}>
         {/* Sidebar */}
         <aside className={`sidebar ${isSidebarOpen ? 'open' : ''}`}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-            <h3 style={{ fontSize: '1.2rem', fontWeight: 700, color: 'var(--text-secondary)', margin: 0 }}>Filtro por Curso</h3>
+            <span className="sidebar-label">Filtrar por Curso</span>
             <button className="sidebar-close-btn" onClick={() => setIsSidebarOpen(false)}>✕</button>
           </div>
-          {COURSES.map(course => (
-            <button 
-              key={course}
-              onClick={() => { setActiveCourse(course); setIsSidebarOpen(false); }}
-              className={`btn ${activeCourse === course ? 'btn-primary' : 'btn-ghost'}`}
-              style={{ textAlign: 'left', padding: '12px 16px', justifyContent: 'flex-start', whiteSpace: 'normal', height: 'auto', lineHeight: 1.4 }}
+          {COURSES.map(({ name, icon }) => (
+            <button
+              key={name}
+              onClick={() => { setActiveCourse(name); setIsSidebarOpen(false); }}
+              className={`sidebar-item ${activeCourse === name ? 'active' : ''}`}
             >
-              {course}
+              <span className="sidebar-icon">{icon}</span>
+              {name}
             </button>
           ))}
         </aside>
 
         {/* Content */}
         <main className="main-content">
-          <button className="sidebar-toggle" onClick={() => setIsSidebarOpen(true)} style={{ marginTop: 0 }}>
+          <button className="sidebar-toggle" onClick={() => setIsSidebarOpen(true)}>
             ☰ Seleccionar Curso
           </button>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 32, flexWrap: 'wrap', gap: 16 }}>
-            <h1 style={{ fontSize: '2rem', fontWeight: 800 }}>⚙️ Panel de Administración</h1>
-            <div style={{ display: 'flex', gap: 8 }}>
+
+          {/* Header */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 28, flexWrap: 'wrap', gap: 16 }}>
+            <div>
+              <h1 style={{ fontSize: '1.9rem', fontWeight: 900, letterSpacing: '-0.4px' }}>⚙️ Administración</h1>
+              <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginTop: 4 }}>
+                Gestiona mazos y tarjetas de tus cursos
+              </p>
+            </div>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               <button className="btn btn-primary" onClick={openNew}>+ Nuevo Mazo</button>
               <button className="btn btn-ghost" onClick={handleSeed}>🌱 Seed</button>
               <button className="btn btn-danger btn-sm" onClick={handleResetProgress}>🔄 Reset</button>
             </div>
           </div>
 
+          {/* Stat Cards */}
           {stats && (
             <div className="admin-grid">
-              <div className="admin-stat-card">
-                <div className="stat-number">{stats.totalDecks}</div>
-                <div className="stat-label">Mazos</div>
-              </div>
-              <div className="admin-stat-card">
-                <div className="stat-number">{stats.totalCards}</div>
-                <div className="stat-label">Tarjetas</div>
-              </div>
-              <div className="admin-stat-card">
-                <div className="stat-number">{stats.totalSessions}</div>
-                <div className="stat-label">Sesiones</div>
-              </div>
-              <div className="admin-stat-card">
-                <div className="stat-number">{stats.avgMastery}%</div>
-                <div className="stat-label">Dominio Promedio</div>
-              </div>
+              {[
+                { icon: '📚', value: stats.totalDecks, label: 'Mazos' },
+                { icon: '🃏', value: stats.totalCards, label: 'Tarjetas' },
+                { icon: '📖', value: stats.totalSessions, label: 'Sesiones' },
+                { icon: '🎯', value: `${stats.avgMastery}%`, label: 'Dominio Avg' },
+              ].map(({ icon, value, label }) => (
+                <div key={label} className="admin-stat-card">
+                  <span className="stat-icon">{icon}</span>
+                  <div className="stat-number">{value}</div>
+                  <div className="stat-label">{label}</div>
+                </div>
+              ))}
             </div>
           )}
 
-          <h2 style={{ fontSize: '1.3rem', fontWeight: 700, marginBottom: 20 }}>Mazos en {activeCourse}</h2>
-          {decks.filter(d => d.course === activeCourse || (!d.course && activeCourse === 'REDES DE DATOS')).length === 0 ? (
-            <p style={{ color: 'var(--text-muted)', textAlign: 'center', padding: 40 }}>
-              No hay mazos para este curso. Crea uno usando el botón "+ Nuevo Mazo".
-            </p>
+          {/* Deck List */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+            <h2 style={{ fontSize: '1.2rem', fontWeight: 800 }}>
+              Mazos en <span style={{ color: 'var(--accent-secondary)' }}>{activeCourse}</span>
+            </h2>
+            <span style={{
+              padding: '2px 10px', borderRadius: 999,
+              background: 'rgba(99,102,241,0.1)', border: '1px solid rgba(99,102,241,0.2)',
+              fontSize: '0.78rem', fontWeight: 700, color: 'var(--accent-secondary)'
+            }}>
+              {filteredDecks.length}
+            </span>
+          </div>
+
+          {filteredDecks.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '48px 20px', color: 'var(--text-muted)', border: '1px dashed var(--border)', borderRadius: 'var(--radius)' }}>
+              <p style={{ fontSize: '2.5rem', marginBottom: 12 }}>📭</p>
+              <p>No hay mazos para este curso.</p>
+              <button className="btn btn-primary btn-sm" style={{ marginTop: 16 }} onClick={openNew}>
+                + Crear el primero
+              </button>
+            </div>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              {decks.filter(d => d.course === activeCourse || (!d.course && activeCourse === 'REDES DE DATOS')).map(deck => (
-                <div key={deck._id} style={{
-                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                  background: 'var(--bg-card)', border: '1px solid var(--border)',
-                  borderRadius: 'var(--radius-sm)', padding: '16px 20px', flexWrap: 'wrap', gap: 12,
-                }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 1 }}>
-                    <span style={{ fontSize: '1.5rem' }}>{deck.icon}</span>
-                    <div>
-                      <div style={{ fontWeight: 600 }}>{deck.title}</div>
-                      <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                        {deck.cardCount} tarjetas · {deck.category} · {deck.masteryPercent}% dominio
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {filteredDecks.map(deck => (
+                <div
+                  key={deck._id}
+                  className="admin-deck-row"
+                  style={{ '--row-color': deck.color } as React.CSSProperties}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 14, flex: 1, minWidth: 0 }}>
+                    <span style={{ fontSize: '1.8rem', flexShrink: 0 }}>{deck.icon}</span>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontWeight: 700, fontSize: '0.95rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {deck.title}
+                      </div>
+                      <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: 2, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                        <span>🃏 {deck.cardCount} tarjetas</span>
+                        <span>📁 {deck.category}</span>
+                        <span style={{ color: deck.masteryPercent >= 80 ? 'var(--green)' : deck.masteryPercent >= 40 ? 'var(--yellow)' : 'var(--text-muted)' }}>
+                          🎯 {deck.masteryPercent}% dominio
+                        </span>
                       </div>
                     </div>
                   </div>
-                  <div style={{ display: 'flex', gap: 8 }}>
-                    <button className="btn btn-ghost btn-sm" onClick={() => openManageCards(deck)}>🃏 Tarjetas</button>
+                  <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+                    <button className="btn btn-ghost btn-sm" onClick={() => openManageCards(deck)}>
+                      🃏 Tarjetas
+                    </button>
                     <button className="btn btn-ghost btn-sm" onClick={() => openEdit(deck)}>✏️</button>
                     <button className="btn btn-danger btn-sm" onClick={() => handleDelete(deck._id)}>🗑️</button>
                   </div>
@@ -273,25 +317,21 @@ export default function AdminPage() {
       {showModal && (
         <div className="modal-overlay" onClick={() => setShowModal(false)}>
           <div className="modal" onClick={e => e.stopPropagation()}>
-            <h2>{editDeck ? 'Editar Mazo' : 'Nuevo Mazo'}</h2>
+            <h2>{editDeck ? '✏️ Editar Mazo' : '+ Nuevo Mazo'}</h2>
             <div className="form-group">
               <label>Título</label>
-              <input className="form-input" value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} placeholder="Ej: Modelo OSI" />
+              <input className="form-input" value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} placeholder="Ej: Modelo OSI" autoFocus />
             </div>
             <div className="form-group">
               <label>Descripción</label>
-              <textarea className="form-textarea" value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} placeholder="Describe el mazo..." />
+              <textarea className="form-textarea" value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} placeholder="Describe el contenido del mazo..." />
             </div>
             <div className="form-group">
               <label>Curso</label>
               <select className="form-input form-select" value={form.course} onChange={e => setForm({ ...form, course: e.target.value })}>
-                <option value="DERECHO INFORMÁTICO">Derecho Informático</option>
-                <option value="GESTIÓN DE DATOS E INFORMACIÓN">Gestión de Datos e Información</option>
-                <option value="GESTIÓN DE RIESGOS Y SEGURIDAD TI">Gestión de Riesgos y Seguridad TI</option>
-                <option value="INGLÉS">Inglés</option>
-                <option value="METODOLOGÍA DE LA INVESTIGACIÓN CIENTÍFICA">Metodología de la Investigación Científica</option>
-                <option value="PRUEBA Y ASEGURAMIENTO DE CALIDAD">Prueba y Aseguramiento de Calidad</option>
-                <option value="REDES DE DATOS">Redes de Datos</option>
+                {COURSES.map(({ name, icon }) => (
+                  <option key={name} value={name}>{icon} {name}</option>
+                ))}
               </select>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
@@ -306,7 +346,11 @@ export default function AdminPage() {
             </div>
             <div className="form-group">
               <label>Color del acento</label>
-              <input type="color" value={form.color} onChange={e => setForm({ ...form, color: e.target.value })} style={{ width: 60, height: 36, border: 'none', borderRadius: 8, cursor: 'pointer', background: 'transparent' }} />
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <input type="color" value={form.color} onChange={e => setForm({ ...form, color: e.target.value })}
+                  style={{ width: 48, height: 40, border: 'none', borderRadius: 8, cursor: 'pointer', background: 'transparent' }} />
+                <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>{form.color}</span>
+              </div>
             </div>
             <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end', marginTop: 24 }}>
               <button className="btn btn-ghost" onClick={() => setShowModal(false)}>Cancelar</button>
@@ -321,76 +365,123 @@ export default function AdminPage() {
       {/* Manage Cards Modal */}
       {showCardModal && manageCardsDeck && (
         <div className="modal-overlay" onClick={closeCardModal}>
-          <div className="modal" style={{ maxWidth: 800 }} onClick={e => e.stopPropagation()}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-              <h2>Tarjetas: {manageCardsDeck.title}</h2>
+          <div className="modal" style={{ maxWidth: 740 }} onClick={e => e.stopPropagation()}>
+            {/* Header */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24 }}>
+              <div>
+                <h2 style={{ marginBottom: 4 }}>{manageCardsDeck.icon} {manageCardsDeck.title}</h2>
+                <p style={{ color: 'var(--text-muted)', fontSize: '0.82rem' }}>
+                  {manageCardsDeck.cards.length} tarjeta{manageCardsDeck.cards.length !== 1 ? 's' : ''}
+                </p>
+              </div>
               <button className="btn btn-ghost btn-sm" onClick={closeCardModal}>✕ Cerrar</button>
             </div>
 
-            <div style={{ display: 'flex', gap: 24, flexDirection: 'column' }}>
-              {/* Formulario para añadir/editar */}
-              <div style={{ background: 'var(--bg-secondary)', padding: 20, borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)' }}>
-                <h3 style={{ fontSize: '1.1rem', marginBottom: 16 }}>{editCardId ? 'Editar Tarjeta' : 'Añadir Nueva Tarjeta'}</h3>
-                
+            {/* Tabs */}
+            <div style={{ display: 'flex', gap: 4, marginBottom: 20, borderBottom: '1px solid var(--border)', paddingBottom: 0 }}>
+              {(['add', 'list'] as const).map(tab => (
+                <button
+                  key={tab}
+                  onClick={() => setCardTab(tab)}
+                  style={{
+                    padding: '9px 18px',
+                    background: 'transparent',
+                    border: 'none',
+                    borderBottom: cardTab === tab ? '2px solid var(--accent-primary)' : '2px solid transparent',
+                    color: cardTab === tab ? 'var(--accent-secondary)' : 'var(--text-muted)',
+                    fontFamily: 'inherit',
+                    fontSize: '0.875rem', fontWeight: 700,
+                    cursor: 'pointer',
+                    marginBottom: -1,
+                    transition: 'color 0.2s',
+                  }}
+                >
+                  {tab === 'add' ? (editCardId ? '✏️ Editar Tarjeta' : '+ Añadir Tarjeta') : `📋 Lista (${manageCardsDeck.cards.length})`}
+                </button>
+              ))}
+            </div>
+
+            {/* Tab: Add/Edit */}
+            {cardTab === 'add' && (
+              <div>
                 <div className="form-group">
                   <label>Pregunta (Frente)</label>
-                  <textarea className="form-textarea" style={{ minHeight: 60 }} value={cardForm.front} onChange={e => setCardForm({ ...cardForm, front: e.target.value })} />
+                  <textarea className="form-textarea" style={{ minHeight: 70 }} value={cardForm.front}
+                    onChange={e => setCardForm({ ...cardForm, front: e.target.value })}
+                    placeholder="¿Cuántas capas tiene el modelo OSI?" autoFocus />
                 </div>
-                
                 <div className="form-group">
                   <label>Respuesta (Reverso)</label>
-                  <textarea className="form-textarea" style={{ minHeight: 60 }} value={cardForm.back} onChange={e => setCardForm({ ...cardForm, back: e.target.value })} />
+                  <textarea className="form-textarea" style={{ minHeight: 70 }} value={cardForm.back}
+                    onChange={e => setCardForm({ ...cardForm, back: e.target.value })}
+                    placeholder="7 capas: Física, Enlace..." />
                 </div>
-
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
                   <div className="form-group">
                     <label>Pista (Opcional)</label>
-                    <input className="form-input" value={cardForm.hint} onChange={e => setCardForm({ ...cardForm, hint: e.target.value })} />
+                    <input className="form-input" value={cardForm.hint}
+                      onChange={e => setCardForm({ ...cardForm, hint: e.target.value })}
+                      placeholder="Ej: Piensa en capas..." />
                   </div>
                   <div className="form-group">
                     <label>Dificultad</label>
-                    <select className="form-input form-select" value={cardForm.difficulty} onChange={e => setCardForm({ ...cardForm, difficulty: e.target.value })}>
-                      <option value="easy">Fácil</option>
-                      <option value="medium">Media</option>
-                      <option value="hard">Difícil</option>
+                    <select className="form-input form-select" value={cardForm.difficulty}
+                      onChange={e => setCardForm({ ...cardForm, difficulty: e.target.value })}>
+                      <option value="easy">🟢 Fácil</option>
+                      <option value="medium">🟡 Media</option>
+                      <option value="hard">🔴 Difícil</option>
                     </select>
                   </div>
                 </div>
-
-                <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end', marginTop: 12 }}>
+                <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 8 }}>
                   {editCardId && (
-                    <button className="btn btn-ghost btn-sm" onClick={() => { setEditCardId(null); setCardForm({ front: '', back: '', hint: '', difficulty: 'medium' }); }}>Cancelar Edición</button>
+                    <button className="btn btn-ghost btn-sm" onClick={() => {
+                      setEditCardId(null);
+                      setCardForm({ front: '', back: '', hint: '', difficulty: 'medium' });
+                    }}>Cancelar</button>
                   )}
-                  <button className="btn btn-success btn-sm" onClick={handleSaveCard} disabled={!cardForm.front.trim() || !cardForm.back.trim()}>
+                  <button className="btn btn-success" onClick={handleSaveCard}
+                    disabled={!cardForm.front.trim() || !cardForm.back.trim()}>
                     {editCardId ? 'Actualizar Tarjeta' : '+ Añadir Tarjeta'}
                   </button>
                 </div>
               </div>
+            )}
 
-              {/* Lista de tarjetas */}
-              <div>
-                <h3 style={{ fontSize: '1.1rem', marginBottom: 16 }}>Tarjetas Existentes ({manageCardsDeck.cards.length})</h3>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 12, maxHeight: 400, overflowY: 'auto', paddingRight: 8 }}>
-                  {manageCardsDeck.cards.length === 0 ? (
-                    <p style={{ color: 'var(--text-muted)' }}>No hay tarjetas en este mazo aún.</p>
-                  ) : (
-                    manageCardsDeck.cards.map((card, idx) => (
-                      <div key={card._id} style={{ background: 'var(--bg-secondary)', padding: 16, borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
-                          <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>#{idx + 1} • Nivel: {card.difficulty}</span>
-                          <div style={{ display: 'flex', gap: 8 }}>
-                            <button className="btn btn-ghost btn-sm" style={{ padding: '4px 8px' }} onClick={() => editCard(card)}>✏️</button>
-                            <button className="btn btn-danger btn-sm" style={{ padding: '4px 8px' }} onClick={() => handleDeleteCard(card._id)}>🗑️</button>
-                          </div>
+            {/* Tab: List */}
+            {cardTab === 'list' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxHeight: 440, overflowY: 'auto', paddingRight: 4 }}>
+                {manageCardsDeck.cards.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--text-muted)' }}>
+                    <p style={{ fontSize: '2rem', marginBottom: 12 }}>🃏</p>
+                    <p>No hay tarjetas aún. Ve a la pestaña <strong>+ Añadir</strong>.</p>
+                  </div>
+                ) : (
+                  manageCardsDeck.cards.map((card, idx) => (
+                    <div key={card._id} style={{
+                      background: 'var(--bg-secondary)', padding: '14px 16px',
+                      borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)',
+                      borderLeft: `3px solid ${difficultyColor[card.difficulty] || 'var(--text-muted)'}`,
+                    }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
+                        <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: 600 }}>
+                          #{idx + 1} · {card.difficulty === 'easy' ? '🟢 Fácil' : card.difficulty === 'hard' ? '🔴 Difícil' : '🟡 Media'}
+                        </span>
+                        <div style={{ display: 'flex', gap: 6 }}>
+                          <button className="btn btn-ghost btn-sm" style={{ padding: '4px 10px' }} onClick={() => editCard(card)}>✏️</button>
+                          <button className="btn btn-danger btn-sm" style={{ padding: '4px 10px' }} onClick={() => handleDeleteCard(card._id)}>🗑️</button>
                         </div>
-                        <div style={{ fontWeight: 600, marginBottom: 4 }}>P: {card.front}</div>
-                        <div style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>R: {card.back}</div>
                       </div>
-                    ))
-                  )}
-                </div>
+                      <div style={{ fontWeight: 600, marginBottom: 4, fontSize: '0.9rem' }}>P: {card.front}</div>
+                      <div style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', lineHeight: 1.45 }}>R: {card.back}</div>
+                      {card.hint && (
+                        <div style={{ marginTop: 6, fontSize: '0.78rem', color: 'var(--yellow)' }}>💡 {card.hint}</div>
+                      )}
+                    </div>
+                  ))
+                )}
               </div>
-            </div>
+            )}
           </div>
         </div>
       )}
